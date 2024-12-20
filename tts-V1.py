@@ -2,52 +2,73 @@ import streamlit as st
 import pandas as pd
 import os
 
+# Function to handle rating submission
 def submit_ratings(selected_audio, selected_model, text_row, scores, user_name):
-    # Create a dictionary to store the ratings and related information
     scores['Audio File'] = selected_audio
     scores['Text'] = text_row.iloc[0]['Text']
     scores['Model'] = selected_model
     scores['User'] = user_name
-    scores['Timestamp'] = pd.to_datetime("now")  # Optional, to track when ratings were submitted
+    scores['Timestamp'] = pd.to_datetime("now")
 
-    # Convert ratings to DataFrame
     result_df = pd.DataFrame([scores])
-
     output_file = "ratings_output.xlsx"
 
     if os.path.exists(output_file):
-        # Read existing ratings and append the new ones
         existing_df = pd.read_excel(output_file)
         combined_df = pd.concat([existing_df, result_df], ignore_index=True)
     else:
-        # If the file doesn't exist, create a new one
         combined_df = result_df
 
-    # Save the updated DataFrame to Excel
     combined_df.to_excel(output_file, index=False)
     return "Ratings submitted successfully!"
 
+# Function to create a secure download link for admin
+def download_file(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode()
+        href = f'<a href="data:file/xlsx;base64,{b64}" download="{os.path.basename(file_path)}">Download Ratings File</a>'
+        return href
+    else:
+        return None
+
 def main():
     st.title("TTS Audio File Rating App")
+
+    # Admin login section
+    st.sidebar.header("Admin Section")
+    admin_password = st.sidebar.text_input("Enter Admin Password", type="password")
+    admin_access = admin_password == "admin123"  # Replace with your secure password
+
+    if admin_access:
+        st.sidebar.success("Admin access granted.")
+        if os.path.exists("ratings_output.xlsx"):
+            st.sidebar.subheader("Download Ratings File")
+            download_link = download_file("ratings_output.xlsx")
+            if download_link:
+                st.sidebar.markdown(download_link, unsafe_allow_html=True)
+            else:
+                st.sidebar.warning("No ratings file found.")
+        else:
+            st.sidebar.warning("No ratings available yet.")
 
     # Upload Excel file with text data
     st.sidebar.header("Upload Text Data")
     uploaded_file = st.sidebar.file_uploader("Choose an Excel file with Text column", type=["xlsx"])
 
     if uploaded_file:
-        # Read uploaded Excel file
         df = pd.read_excel(uploaded_file)
 
         if 'Text' not in df.columns or 'row_id' not in df.columns:
             st.error("The uploaded file must contain columns named 'row_id' and 'Text'.")
             return
 
-        # User input for model directory
+        # Upload audio files
         st.sidebar.header("Upload All Audio Files")
         uploaded_audio_files = st.sidebar.file_uploader("Upload audio files (multiple files allowed)", type=["wav"], accept_multiple_files=True)
 
         if uploaded_audio_files:
-            # Save uploaded audio files temporarily
             audio_files_dir = "uploaded_audio_files"
             os.makedirs(audio_files_dir, exist_ok=True)
 
@@ -57,23 +78,18 @@ def main():
 
             # Predefined model names
             model_names = ["Google TTS", "Facebook MMS", "Indic TTS", "Venkaiah TTS"]
-
             selected_model = st.sidebar.selectbox("Choose a TTS model", model_names)
 
-            # Filter audio files for the selected model
             model_audio_files = [f.name for f in uploaded_audio_files if selected_model.replace(" ", "") in f.name]
 
             if not model_audio_files:
                 st.warning(f"No audio files found for the selected model: {selected_model}.")
             else:
-                # Dropdown for selecting audio file
                 selected_audio = st.sidebar.selectbox("Choose an audio file", model_audio_files)
 
                 if selected_audio:
-                    # Display corresponding text
                     st.subheader("Selected Audio and Corresponding Text")
 
-                    # Extract row_id from the audio file name (assuming format: row_id_model_filename.extension)
                     try:
                         row_id = int(selected_audio.split("_")[0])
                     except ValueError:
@@ -86,11 +102,9 @@ def main():
                         st.audio(os.path.join(audio_files_dir, selected_audio), format="audio/wav")
                         st.write(f"Text: {text_row.iloc[0]['Text']}")
 
-                        # Collect user name before submitting ratings
                         user_name = st.text_input("Enter your name", "Anonymous")
 
                         if user_name:
-                            # Collect ratings
                             st.subheader("Provide Ratings")
                             scores = {}
                             scores['Simple Sentences'] = st.slider("Simple Sentences", 1, 5, 1)
@@ -103,7 +117,6 @@ def main():
                             if st.button("Submit Ratings"):
                                 message = submit_ratings(selected_audio, selected_model, text_row, scores, user_name)
                                 st.success(message)
-
                     else:
                         st.warning(f"No matching text found for row_id: {row_id}.")
                 else:
@@ -113,3 +126,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import base64 
 
 # Function to handle rating submission
 def submit_ratings(selected_audio, selected_model, text_row, scores, user_name):
